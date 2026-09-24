@@ -1,21 +1,21 @@
 [Unit]
 Description=XMPP to Telegram transport
-Documentation=file:/path/xmpp-transport-telegram/README.md
+Documentation=file:/home/ilya/Projects/xmpp-transport-telegram/README.md
 After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 Type=forking
-User=username
-Group=usergroup
-WorkingDirectory=/path/xmpp-transport-telegram
+User=ilya
+Group=ilya
+WorkingDirectory=/home/ilya/Projects/xmpp-transport-telegram
 
 RuntimeDirectory=xmpp-transport-telegram
 RuntimeDirectoryMode=0755
 PIDFile=/run/xmpp-transport-telegram/xmpp_transport_telegram.pid
 
-ExecStart=/usr/bin/python3 -m xmpp_transport_telegram --config /path/config.ini --daemon --pid-file /run/xmpp-transport-telegram/xmpp_transport_telegram.pid
-ExecStop=/usr/bin/python3 -m xmpp_transport_telegram --config /path/config.ini --stop --pid-file /run/xmpp-transport-telegram/xmpp_transport_telegram.pid
+ExecStart=/home/ilya/Projects/xmpp-transport-telegram/venv/bin/python -m xmpp_transport_telegram --config /home/ilya/Projects/xmpp-transport-telegram/config.ini --daemon --pid-file /run/xmpp-transport-telegram/xmpp_transport_telegram.pid
+ExecStop=/home/ilya/Projects/xmpp-transport-telegram/venv/bin/python -m xmpp_transport_telegram --config /home/ilya/Projects/xmpp-transport-telegram/config.ini --stop --pid-file /run/xmpp-transport-telegram/xmpp_transport_telegram.pid
 ExecStartPost=/bin/sleep 2
 
 Restart=on-failure

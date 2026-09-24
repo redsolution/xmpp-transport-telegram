@@ -20,6 +20,7 @@ session_storage_dir = data/telegram_sessions
 [transport]
 server_domain = example.com
 pid_file = run/xmpp_transport_telegram.pid
+iq_auth_secret = put-a-long-random-secret-here
 
 [server]
 health_host = 127.0.0.1

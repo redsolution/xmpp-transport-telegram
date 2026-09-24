@@ -53,6 +53,7 @@ class Settings:
     log_backup_count: int
     qr_max_age_seconds: int = 3600
     qr_cleanup_interval_seconds: int = 3600
+    transport_iq_auth_secret: str = ""
 
 
 def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> Settings:
@@ -91,6 +92,7 @@ def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> Settings:
             "pid_file",
             fallback="run/xmpp_transport_telegram.pid",
         ),
+        transport_iq_auth_secret=config.get("transport", "iq_auth_secret", fallback=""),
         health_host=health_host,
         health_port=health_port,
         qr_storage_dir=config.get("server", "qr_storage_dir", fallback="data/login_qr"),
@@ -121,6 +123,8 @@ def validate_settings(settings: Settings) -> None:
         missing.append("xmpp.component_jid")
     if not settings.xmpp_component_secret:
         missing.append("xmpp.component_password")
+    if len(settings.transport_iq_auth_secret.encode("utf-8")) < 32:
+        missing.append("transport.iq_auth_secret (at least 32 bytes)")
     if not settings.telegram_api_id:
         missing.append("telegram.api_id")
     if not settings.telegram_api_hash:

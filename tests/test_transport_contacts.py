@@ -504,3 +504,23 @@ def _settings():
         log_max_bytes=10485760,
         log_backup_count=5,
     )
+
+
+def test_transport_iq_signature_known_vector():
+    settings = _settings()
+    object.__setattr__(settings, "transport_iq_auth_secret", "x" * 32)
+    component = XmppComponent(settings, None)
+
+    signature = component.client._transport_operation_signature(
+        "add-roster-contact",
+        {
+            "owner_jid": "user@example.com",
+            "contact_jid": "chat-100@telegram.example.com",
+            "name": "Alice",
+        },
+        ("Telegram",),
+        "1700000000",
+        "00112233445566778899aabbccddeeff",
+    )
+
+    assert signature == "48cd62e90ae8c18587f6a78e149aef4254c6f2239ea1694bd00af400a436068d"

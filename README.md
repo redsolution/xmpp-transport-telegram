@@ -84,6 +84,8 @@ Generate the encryption key used for Telegram session data:
 venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
+Configure `transport.iq_auth_secret` with the same random secret as the server module's `iq_auth_secret` option. Use at least 32 bytes; this secret authenticates privileged roster IQ requests.
+
 Set `telegram.api_id` and `telegram.api_hash` from Telegram's official app
 configuration flow at https://my.telegram.org/apps.
 

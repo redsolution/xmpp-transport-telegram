@@ -1,5 +1,9 @@
 import asyncio
+import hashlib
+import hmac
 import logging
+import secrets
+import time
 from typing import Awaitable, Callable, Optional
 from xml.etree import ElementTree as ET
 
@@ -334,7 +338,14 @@ class TelegramCommandComponent(ComponentXMPP):
         groups: tuple = (),
         timeout: int = 10,
     ) -> str:
-        query = self._transport_query_element(operation, fields, groups)
+        timestamp = str(int(time.time()))
+        nonce = secrets.token_hex(16)
+        signature = self._transport_operation_signature(
+            operation, fields, groups, timestamp, nonce
+        )
+        query = self._transport_query_element(
+            operation, fields, groups, timestamp, nonce, signature
+        )
         iq = self.make_iq_set(
             sub=query,
             ito=self.transport_server_domain,
@@ -348,10 +359,25 @@ class TelegramCommandComponent(ComponentXMPP):
             return "ok"
         return query_result.attrib.get("status", "ok")
 
-    def _transport_query_element(self, operation: str, fields: dict, groups: tuple) -> ET.Element:
+    def _transport_query_element(
+        self,
+        operation: str,
+        fields: dict,
+        groups: tuple,
+        timestamp: Optional[str] = None,
+        nonce: Optional[str] = None,
+        signature: Optional[str] = None,
+    ) -> ET.Element:
+        attrs = {"op": operation}
+        if timestamp is not None:
+            attrs["auth-timestamp"] = timestamp
+        if nonce is not None:
+            attrs["auth-nonce"] = nonce
+        if signature is not None:
+            attrs["auth-signature"] = signature
         query = ET.Element(
             "{%s}query" % TRANSPORT_TELEGRAM_NS,
-            {"op": operation},
+            attrs,
         )
         for name, value in fields.items():
             field = ET.SubElement(query, "field", {"name": str(name)})
@@ -360,6 +386,29 @@ class TelegramCommandComponent(ComponentXMPP):
             group_el = ET.SubElement(query, "group")
             group_el.text = str(group)
         return query
+
+    @staticmethod
+    def _canonical_auth_part(value: str) -> bytes:
+        encoded = str(value).encode("utf-8")
+        return str(len(encoded)).encode("ascii") + b":" + encoded + b","
+
+    def _transport_operation_signature(
+        self, operation: str, fields: dict, groups: tuple, timestamp: str, nonce: str
+    ) -> str:
+        values = [
+            "v1", timestamp, nonce, self.component_domain,
+            self.transport_server_domain, operation, str(len(fields)),
+        ]
+        for name in sorted(fields):
+            values.extend((str(name), str(fields[name])))
+        values.append(str(len(groups)))
+        values.extend(str(group) for group in groups)
+        canonical = b"".join(self._canonical_auth_part(value) for value in values)
+        return hmac.new(
+            self.settings.transport_iq_auth_secret.encode("utf-8"),
+            canonical,
+            hashlib.sha256,
+        ).hexdigest()
 
     async def create_xabber_group(
         self,
