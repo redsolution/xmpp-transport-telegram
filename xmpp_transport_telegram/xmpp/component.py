@@ -74,6 +74,21 @@ class TelegramCommandComponent(ComponentXMPP):
 
     async def _handle_message_async(self, message) -> None:
         message_type = message["type"]
+        if message_type == "error":
+            return
+
+        to_jid = JID(message["to"])
+        from_jid = str(JID(message["from"]).bare)
+        group_sender_jid = XmppMessageXml.group_sender_jid(message)
+        if not self._is_allowed_sender_jid(from_jid):
+            self._send_forbidden_error(message)
+            return
+        if (
+            group_sender_jid is not None
+            and not self._is_allowed_sender_jid(group_sender_jid)
+        ):
+            self._send_forbidden_error(message)
+            return
         if message_type not in ("chat", "normal", ""):
             return
 
@@ -81,9 +96,6 @@ class TelegramCommandComponent(ComponentXMPP):
         if message.xml.find(TRANSPORT_FAKE_OUTGOING_TAG) is not None:
             return
 
-        to_jid = JID(message["to"])
-        from_jid = str(JID(message["from"]).bare)
-        group_sender_jid = XmppMessageXml.group_sender_jid(message)
         if (
             to_jid.bare == self.bot_jid
             and group_sender_jid is None
@@ -293,6 +305,21 @@ class TelegramCommandComponent(ComponentXMPP):
             mbody=body,
             mtype="chat",
         )
+
+    def _is_allowed_sender_jid(self, jid: str) -> bool:
+        try:
+            return JID(jid).domain == self.transport_server_domain
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _send_forbidden_error(message) -> None:
+        error = message.reply(clear=False)
+        error["type"] = "error"
+        error["error"]["type"] = "auth"
+        error["error"]["condition"] = "forbidden"
+        error["error"]["text"] = "This Telegram transport is available only to local users."
+        error.send()
 
     def _is_transport_group_jid(self, jid: str) -> bool:
         suffix = "@%s" % self.transport_server_domain

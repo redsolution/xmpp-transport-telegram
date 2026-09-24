@@ -150,6 +150,7 @@ transport.
 ## Boundaries
 
 - The Python transport must not write directly to Xabber Server database tables.
+- Only users of the configured `transport.server_domain` may send commands or messages to the component; other senders receive an XMPP `forbidden` error.
 - The server module is roster-only: add, rename, and remove virtual Telegram
   contacts.
 - Groups, members, messages, archives, avatars, media, fanout, and loop

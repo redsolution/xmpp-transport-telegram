@@ -74,9 +74,29 @@ class FakeMessage:
             "id": message_id,
         }
         self.xml = xml if xml is not None else ET.Element("message")
+        self.error_reply = FakeErrorReply()
 
     def __getitem__(self, key):
         return self.values[key]
+
+    def reply(self, clear=True):
+        assert clear is False
+        return self.error_reply
+
+
+class FakeErrorReply:
+    def __init__(self):
+        self.values = {"error": {}}
+        self.sent = False
+
+    def __getitem__(self, key):
+        return self.values[key]
+
+    def __setitem__(self, key, value):
+        self.values[key] = value
+
+    def send(self):
+        self.sent = True
 
 
 def test_xmpp_component_start_retries_after_ready_timeout(monkeypatch):
@@ -214,5 +234,94 @@ def test_xabber_group_user_message_to_bot_runs_direct_handler():
         assert direct_calls[0].recipient == "bot@telegram.example.com"
         assert direct_calls[0].body == "hello tg"
         assert direct_calls[0].group_sender_jid == "test@example.com"
+
+    asyncio.run(run_test())
+
+
+def test_foreign_user_command_is_rejected_with_forbidden_error():
+    async def run_test():
+        command_calls = []
+
+        async def command_handler(from_jid, body, _notify):
+            command_calls.append((from_jid, body))
+            return ControlResponse("unexpected")
+
+        client = TelegramCommandComponent(make_settings(), command_handler)
+        message = FakeMessage(
+            from_jid="attacker@foreign.example/resource",
+            to_jid="bot@telegram.example.com",
+            body="/status",
+        )
+
+        await client._handle_message_async(message)
+
+        assert command_calls == []
+        assert message.error_reply.sent is True
+        assert message.error_reply["type"] == "error"
+        assert message.error_reply["error"]["type"] == "auth"
+        assert message.error_reply["error"]["condition"] == "forbidden"
+
+    asyncio.run(run_test())
+
+
+def test_foreign_user_direct_message_is_rejected_with_forbidden_error():
+    async def run_test():
+        direct_calls = []
+
+        async def command_handler(_from_jid, _body, _notify):
+            raise AssertionError("command handler should not be called")
+
+        async def direct_message_handler(message):
+            direct_calls.append(message)
+
+        client = TelegramCommandComponent(
+            make_settings(), command_handler, direct_message_handler
+        )
+        message = FakeMessage(
+            from_jid="attacker@foreign.example/resource",
+            to_jid="chat-100@telegram.example.com",
+            body="hello",
+        )
+
+        await client._handle_message_async(message)
+
+        assert direct_calls == []
+        assert message.error_reply.sent is True
+        assert message.error_reply["error"]["condition"] == "forbidden"
+
+    asyncio.run(run_test())
+
+
+def test_foreign_group_sender_marker_is_rejected_with_forbidden_error():
+    async def run_test():
+        direct_calls = []
+
+        async def command_handler(_from_jid, _body, _notify):
+            raise AssertionError("command handler should not be called")
+
+        async def direct_message_handler(message):
+            direct_calls.append(message)
+
+        x = ET.Element("{%s}x" % GROUPS_NS)
+        user = ET.SubElement(x, "{%s}user" % GROUPS_NS)
+        jid = ET.SubElement(user, "jid")
+        jid.text = "attacker@foreign.example"
+        xml = ET.Element("message")
+        xml.append(x)
+        client = TelegramCommandComponent(
+            make_settings(), command_handler, direct_message_handler
+        )
+        message = FakeMessage(
+            from_jid="telegramg-owner--100@example.com/Group",
+            to_jid="bot@telegram.example.com",
+            body="hello",
+            xml=xml,
+        )
+
+        await client._handle_message_async(message)
+
+        assert direct_calls == []
+        assert message.error_reply.sent is True
+        assert message.error_reply["error"]["condition"] == "forbidden"
 
     asyncio.run(run_test())
