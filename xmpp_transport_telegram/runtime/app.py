@@ -9,7 +9,7 @@ from aiohttp import web
 
 from xmpp_transport_telegram.core.transport import TelegramTransport
 from xmpp_transport_telegram.runtime.config import load_settings, validate_settings
-from xmpp_transport_telegram.runtime.daemon import daemonize, remove_pid, stop
+from xmpp_transport_telegram.runtime.daemon import daemonize, remove_pid, running_pid, stop
 from xmpp_transport_telegram.runtime.web import create_app
 from xmpp_transport_telegram.storage.repository import Repository
 
@@ -87,9 +87,7 @@ def main(argv: Optional[list] = None) -> None:
     pid_file = args.pid_file or settings.transport_pid_file
 
     if args.status:
-        from xmpp_transport_telegram.runtime.daemon import read_pid
-
-        pid = read_pid(pid_file)
+        pid = running_pid(pid_file)
         print("running: %s" % pid if pid else "stopped")
         return
     if args.stop:
