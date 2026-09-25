@@ -236,8 +236,12 @@ class TelegramTransport:
         log.info("Telegram transport backend started")
         await self._stopped.wait()
 
-    async def stop(self) -> None:
+    def request_stop(self) -> None:
+        """Ask the main coroutine to perform an orderly asynchronous shutdown."""
         self._stopped.set()
+
+    async def stop(self) -> None:
+        self.request_stop()
         if self._qr_cleanup_task is not None:
             self._qr_cleanup_task.cancel()
             try:
@@ -252,6 +256,7 @@ class TelegramTransport:
             except asyncio.CancelledError:
                 pass
             self._avatar_cleanup_task = None
+        await self.commands.stop()
         await self._stop_all_telegram_listeners()
         await self.xmpp.stop()
 

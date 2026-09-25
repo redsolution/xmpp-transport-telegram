@@ -294,3 +294,56 @@ async def _test_login_reports_replaced_previous_xmpp_binding():
         "Telegram returned no direct chats to sync. "
         "Previous XMPP binding old@example.com was replaced."
     ]
+
+
+def test_logout_disconnects_client_when_connect_is_cancelled():
+    asyncio.run(_test_logout_disconnects_client_when_connect_is_cancelled())
+
+
+async def _test_logout_disconnects_client_when_connect_is_cancelled():
+    cipher = SessionCipher(Fernet.generate_key().decode("ascii"))
+    repository = FakeRepository()
+    repository.sessions[1] = {
+        "telegram_user_id": 42,
+        "phone": None,
+        "encrypted_session": cipher.encrypt("stored-session"),
+        "connected": True,
+    }
+    telegram = FakeTelegramBackend()
+
+    async def cancelled_connect():
+        raise asyncio.CancelledError()
+
+    telegram.client.connect = cancelled_connect
+    service = CommandService(repository, telegram, cipher, FakeQrStore(), fake_ensure_contact)
+
+    try:
+        await service._logout("user@example.com")
+    except asyncio.CancelledError:
+        pass
+    else:
+        raise AssertionError("logout cancellation was not propagated")
+
+    assert telegram.client.disconnected is True
+
+
+def test_service_stop_cancels_login_attempt_and_disconnects_client():
+    asyncio.run(_test_service_stop_cancels_login_attempt_and_disconnects_client())
+
+
+async def _test_service_stop_cancels_login_attempt_and_disconnects_client():
+    repository = FakeRepository()
+    telegram = FakeTelegramBackend()
+    cipher = SessionCipher(Fernet.generate_key().decode("ascii"))
+    service = CommandService(repository, telegram, cipher, FakeQrStore(), fake_ensure_contact)
+
+    async def notify(_body):
+        pass
+
+    await service.handle("user@example.com", "/login", notify)
+    task = service._qr_attempts["user@example.com"].task
+    await service.stop()
+
+    assert task.cancelled()
+    assert telegram.client.disconnected is True
+    assert service._qr_attempts == {}

@@ -252,8 +252,8 @@ class CommandService:
         session_data = await self._load_session(account_id)
         if session_data:
             client = self.telegram.client_for_session(session_data)
-            await client.connect()
             try:
+                await client.connect()
                 if await client.is_user_authorized():
                     await client.log_out()
             finally:
@@ -387,7 +387,16 @@ class CommandService:
             return
         if not attempt.task.done() and attempt.task is not asyncio.current_task():
             attempt.task.cancel()
+            try:
+                await attempt.task
+            except asyncio.CancelledError:
+                pass
         await attempt.client.disconnect()
+
+    async def stop(self) -> None:
+        """Cancel login attempts and close their Telethon connections."""
+        for xmpp_jid in list(self._qr_attempts):
+            await self._discard_attempt(xmpp_jid)
 
     def _qr_response(self, qr_login, qr_image: StoredQrImage) -> ControlResponse:
         return ControlResponse(

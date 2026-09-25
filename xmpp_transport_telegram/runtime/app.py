@@ -3,6 +3,7 @@ import asyncio
 import logging
 import logging.handlers
 import os
+import signal
 from typing import Optional
 
 from aiohttp import web
@@ -52,6 +53,14 @@ async def run(config_path: str) -> None:
     await repository.migrate()
 
     transport = TelegramTransport(settings, repository)
+    loop = asyncio.get_running_loop()
+    handled_signals = []
+    for shutdown_signal in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(shutdown_signal, transport.request_stop)
+        except NotImplementedError:
+            continue
+        handled_signals.append(shutdown_signal)
     app = create_app(
         settings.qr_storage_dir,
         settings.avatar_storage_dir,
@@ -66,9 +75,13 @@ async def run(config_path: str) -> None:
     try:
         await transport.run_forever()
     finally:
-        await transport.stop()
-        await runner.cleanup()
-        await repository.close()
+        try:
+            await transport.stop()
+        finally:
+            for shutdown_signal in handled_signals:
+                loop.remove_signal_handler(shutdown_signal)
+            await runner.cleanup()
+            await repository.close()
 
 
 def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
